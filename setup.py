@@ -6,13 +6,13 @@ INSTALL_REQUIRES = []
 TESTS_REQUIRE = ['pytest >= 2.7.1']
 
 setup(
-    name='replay_trajectory_paper',
+    name='sleep_analysis',
     version='0.1.0.dev0',
     license='MIT',
     description=('Classify replay trajectories.'),
     author='Eric Denovellis',
-    author_email='edeno@bu.edu',
-    url='https://github.com/Eden-Kramer-Lab/replay_trajectory_paper',
+    author_email='eric.denovellis@ucsf.edu',
+    url='https://github.com/edeno/sleep_analysis',
     packages=find_packages(),
     install_requires=INSTALL_REQUIRES,
     tests_require=TESTS_REQUIRE,

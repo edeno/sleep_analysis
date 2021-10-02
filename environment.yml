@@ -1,4 +1,4 @@
-name: replay_trajectory_paper
+name: sleep_analysis
 channels:
 - defaults
 - conda-forge
