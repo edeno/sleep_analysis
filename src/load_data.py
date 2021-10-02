@@ -233,7 +233,8 @@ def get_sleep_interpolated_position_info(
     return position_df
 
 
-def get_sleep_ripple_times(epoch_key, brain_areas=["CA1", "CA2", "CA3"]):
+def get_sleep_ripple_times(epoch_key, sampling_frequency=1500,
+                           brain_areas=["CA1", "CA2", "CA3"]):
     position_info = (get_sleep_interpolated_position_info(epoch_key, ANIMALS)
                      .dropna(subset=["speed"]))
     speed = position_info["speed"]
@@ -270,7 +271,18 @@ def get_sleep_ripple_times(epoch_key, brain_areas=["CA1", "CA2", "CA3"]):
         minimum_duration=np.timedelta64(15, "ms"),
     )
 
-    return ripple_times, ripple_filtered_lfps, lfps
+    ripple_consensus_trace = pd.DataFrame(
+        get_ripple_consensus_trace(
+            ripple_filtered_lfps, sampling_frequency),
+        index=ripple_filtered_lfps.index,
+        columns=['ripple_consensus_trace'])
+    ripple_consensus_trace_zscore = pd.DataFrame(
+        zscore(ripple_consensus_trace, nan_policy='omit'),
+        index=ripple_filtered_lfps.index,
+        columns=['ripple_consensus_trace_zscore'])
+
+    return (ripple_times, ripple_filtered_lfps, lfps,
+            ripple_consensus_trace_zscore)
 
 
 def load_sleep_data(epoch_key, brain_areas=None):
@@ -289,6 +301,7 @@ def load_sleep_data(epoch_key, brain_areas=None):
     def _time_function(*args, **kwargs):
         return time
 
+    logger.info('Loading position info...')
     position_info = get_sleep_interpolated_position_info(
         epoch_key, ANIMALS, _time_function
     ).dropna(subset=["speed"])
@@ -302,6 +315,7 @@ def load_sleep_data(epoch_key, brain_areas=None):
     lfps = get_LFPs(tetrode_keys, ANIMALS)
     lfps = lfps.resample("2ms").mean().fillna(method="pad").reindex(time)
 
+    logger.info('Loading spikes...')
     try:
         neuron_info = make_neuron_dataframe(
             ANIMALS).xs(epoch_key, drop_level=False)
@@ -316,6 +330,7 @@ def load_sleep_data(epoch_key, brain_areas=None):
     except KeyError:
         spikes = None
 
+    logger.info('Loading multiunit...')
     tetrode_info = tetrode_info.loc[is_brain_areas]
     multiunit = (
         get_all_multiunit_indicators(
@@ -331,8 +346,17 @@ def load_sleep_data(epoch_key, brain_areas=None):
         columns=["firing_rate"],
     )
 
-    ripple_times, ripple_filtered_lfps, ripple_lfps = get_sleep_ripple_times(
-        epoch_key)
+    multiunit_high_synchrony_times = multiunit_HSE_detector(
+        time, multiunit_spikes, position_info['speed'].values,
+        SAMPLING_FREQUENCY,
+        minimum_duration=np.timedelta64(15, 'ms'), zscore_threshold=2.0,
+        close_event_threshold=np.timedelta64(0, 'ms'))
+    multiunit_high_synchrony_times = multiunit_high_synchrony_times.assign(
+        duration=lambda df: (df.end_time - df.start_time).dt.total_seconds())
+
+    logger.info('Finding ripple times...')
+    (ripple_times, ripple_filtered_lfps, ripple_lfps,
+     ripple_consensus_trace_zscore) = get_sleep_ripple_times(epoch_key)
 
     ripple_times = ripple_times.assign(
         duration=lambda df: (df.end_time - df.start_time).dt.total_seconds()
@@ -341,6 +365,7 @@ def load_sleep_data(epoch_key, brain_areas=None):
     return {
         "position_info": position_info,
         "ripple_times": ripple_times,
+        'multiunit_HSE_times': multiunit_high_synchrony_times,
         "spikes": spikes,
         "multiunit": multiunit,
         "lfps": lfps,
