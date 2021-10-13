@@ -256,7 +256,8 @@ def get_sleep_ripple_times(epoch_key, sampling_frequency=1500,
 
     ripple_times = Kay_ripple_detector(
         time, ripple_lfps.values, speed.values, sampling_frequency,
-        speed_threshold=1.0, zscore_threshold=2.0,
+        speed_threshold=1.0,
+        zscore_threshold=2.0,
         close_ripple_threshold=np.timedelta64(0, 'ms'),
         minimum_duration=np.timedelta64(15, 'ms'))
 
@@ -336,8 +337,10 @@ def load_sleep_data(epoch_key, brain_areas=None):
     multiunit_high_synchrony_times = multiunit_HSE_detector(
         time, multiunit_spikes, position_info['speed'].values,
         SAMPLING_FREQUENCY,
-        minimum_duration=np.timedelta64(15, 'ms'), zscore_threshold=2.0,
-        close_event_threshold=np.timedelta64(0, 'ms'))
+        minimum_duration=np.timedelta64(15, 'ms'),
+        zscore_threshold=2.0,
+        close_event_threshold=np.timedelta64(0, 'ms'),
+        speed_threshold=1)
     multiunit_high_synchrony_times = multiunit_high_synchrony_times.assign(
         duration=lambda df: (df.end_time - df.start_time).dt.total_seconds())
 
