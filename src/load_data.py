@@ -237,39 +237,28 @@ def get_sleep_ripple_times(epoch_key, sampling_frequency=1500,
                            brain_areas=["CA1", "CA2", "CA3"]):
     position_info = (get_sleep_interpolated_position_info(epoch_key, ANIMALS)
                      .dropna(subset=["speed"]))
-    speed = position_info["speed"]
+    speed = position_info['speed']
     time = position_info.index
-    tetrode_info = make_tetrode_dataframe(
-        ANIMALS).xs(epoch_key, drop_level=False)
+    tetrode_info = make_tetrode_dataframe(ANIMALS).xs(
+        epoch_key, drop_level=False)
     if ~np.all(np.isnan(tetrode_info.validripple.astype(float))):
-        tetrode_keys = tetrode_info.loc[(tetrode_info.validripple == 1)].index
+        tetrode_keys = tetrode_info.loc[
+            (tetrode_info.validripple == 1)].index
     else:
-        is_brain_areas = tetrode_info.area.astype(
-            str).str.upper().isin(brain_areas)
+        is_brain_areas = (
+            tetrode_info.area.astype(str).str.upper().isin(brain_areas))
         tetrode_keys = tetrode_info.loc[is_brain_areas].index
 
-    lfps = get_LFPs(tetrode_keys, ANIMALS).reindex(time)
+    ripple_lfps = get_LFPs(tetrode_keys, ANIMALS).reindex(time)
     ripple_filtered_lfps = pd.DataFrame(
-        np.stack(
-            [
-                filter_ripple_band(
-                    lfps.values[:, ind], sampling_frequency=1500)
-                for ind in np.arange(lfps.shape[1])
-            ],
-            axis=1,
-        ),
-        index=lfps.index,
-    )
+        filter_ripple_band(np.asarray(ripple_lfps)),
+        index=ripple_lfps.index)
 
     ripple_times = Kay_ripple_detector(
-        time,
-        lfps.values,
-        speed.values,
-        sampling_frequency=1500,
-        zscore_threshold=2.0,
-        close_ripple_threshold=np.timedelta64(0, "ms"),
-        minimum_duration=np.timedelta64(15, "ms"),
-    )
+        time, ripple_lfps.values, speed.values, sampling_frequency,
+        speed_threshold=1.0, zscore_threshold=2.0,
+        close_ripple_threshold=np.timedelta64(0, 'ms'),
+        minimum_duration=np.timedelta64(15, 'ms'))
 
     ripple_consensus_trace = pd.DataFrame(
         get_ripple_consensus_trace(
@@ -281,7 +270,7 @@ def get_sleep_ripple_times(epoch_key, sampling_frequency=1500,
         index=ripple_filtered_lfps.index,
         columns=['ripple_consensus_trace_zscore'])
 
-    return (ripple_times, ripple_filtered_lfps, lfps,
+    return (ripple_times, ripple_filtered_lfps, ripple_lfps,
             ripple_consensus_trace_zscore)
 
 
