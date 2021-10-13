@@ -9,12 +9,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
 from loren_frank_data_processing import save_xarray
+from loren_frank_data_processing.position import make_track_graph
 from replay_trajectory_classification import (ClusterlessClassifier,
                                               SortedSpikesClassifier)
 from src.analysis import (get_place_field_max, get_sleep_replay_info,
                           reshape_to_segments)
 from src.load_data import get_sleep_and_prev_run_epochs, load_sleep_data
-from src.parameters import (FIGURE_DIR, PROBABILITY_THRESHOLD,
+from src.parameters import (ANIMALS, FIGURE_DIR, PROBABILITY_THRESHOLD,
                             PROCESSED_DATA_DIR, SAMPLING_FREQUENCY,
                             TRANSITION_TO_CATEGORY)
 from src.visualization import (plot_category_counts, plot_category_duration,
@@ -75,10 +76,11 @@ def sorted_spikes_analysis_1D(sleep_epoch_key, prev_run_epoch_key,
                     group=f'/{data_type}/{dim}/classifier/ripples/')
 
     logging.info('Saving replay_info...')
+    track_graph, center_well_id = make_track_graph(prev_run_epoch_key, ANIMALS)
     replay_info = get_sleep_replay_info(
-        results, ripple_spikes, data['ripple_times'], data['position_info'],
-        SAMPLING_FREQUENCY, PROBABILITY_THRESHOLD, sleep_epoch_key,
-        classifier)
+        results, data['spikes'], data['ripple_times'], data['position_info'],
+        track_graph, SAMPLING_FREQUENCY, PROBABILITY_THRESHOLD, sleep_epoch_key,
+        classifier, data['ripple_consensus_trace_zscore'])
     epoch_identifier = (f'{sleep_epoch_key[0]}_{sleep_epoch_key[1]:02d}'
                         f'_{sleep_epoch_key[2]:02d}_{data_type}_{dim}')
     replay_info_filename = os.path.join(
@@ -198,9 +200,11 @@ def clusterless_analysis_1D(sleep_epoch_key, prev_run_epoch_key,
                     group=f'/{data_type}/{dim}/classifier/ripples/')
 
     logging.info('Saving replay_info...')
+    track_graph, center_well_id = make_track_graph(prev_run_epoch_key, ANIMALS)
     replay_info = get_sleep_replay_info(
-        results, ripple_spikes, data['ripple_times'], data['position_info'],
-        SAMPLING_FREQUENCY, PROBABILITY_THRESHOLD, sleep_epoch_key, classifier)
+        results, spikes, data['ripple_times'], data['position_info'],
+        track_graph, SAMPLING_FREQUENCY, PROBABILITY_THRESHOLD, sleep_epoch_key,
+        classifier, data['ripple_consensus_trace_zscore'])
     epoch_identifier = (f'{sleep_epoch_key[0]}_{sleep_epoch_key[1]:02d}'
                         f'_{sleep_epoch_key[2]:02d}_{data_type}_{dim}')
     replay_info_filename = os.path.join(

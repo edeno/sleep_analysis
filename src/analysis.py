@@ -711,9 +711,10 @@ def get_map_speed(
     return np.abs(speed)
 
 
-def get_sleep_replay_info(results, ripple_spikes, ripple_times, position_info,
-                          sampling_frequency, probability_threshold,
-                          epoch_key, classifier):
+def get_sleep_replay_info(
+        results, spikes, ripple_times, position_info,
+        track_graph, sampling_frequency, probability_threshold,
+        epoch_key, classifier, ripple_consensus_trace_zscore):
     '''
     Parameters
     ----------
@@ -729,35 +730,24 @@ def get_sleep_replay_info(results, ripple_spikes, ripple_times, position_info,
     -------
     replay_info : pandas.DataFrame, shape (n_ripples, n_covariates)
     '''
-    probability = get_probability(results)
-    is_classified = get_is_classified(probability, probability_threshold)
-    is_unclassified = (is_classified.sum('state') < 1).assign_coords(
-        state='Unclassified')
-    is_classified = xr.concat((is_classified, is_unclassified), dim='state')
+    # Downsample the ripple consensus trace to match the spiking data sampling
+    # rate
+    new_index = pd.Index(np.unique(np.concatenate(
+        (ripple_consensus_trace_zscore.index, position_info.index))),
+        name='time')
+    ripple_consensus_trace_zscore = (ripple_consensus_trace_zscore
+                                     .reindex(index=new_index)
+                                     .interpolate(method='linear')
+                                     .reindex(index=position_info.index)
+                                     )
+    replay_info = pd.DataFrame(
+        [get_ripple_sleep_replay_info(ripple, results, spikes,
+                                      ripple_consensus_trace_zscore,
+                                      position_info, sampling_frequency,
+                                      probability_threshold, track_graph,
+                                      classifier)
+         for ripple in ripple_times.itertuples()], index=ripple_times.index)
 
-    classified = (~is_classified.sel(
-        state='Unclassified')).sum('time').values > 0
-
-    duration = (is_classified.sum('time') / sampling_frequency)
-    duration = duration.to_dataframe().unstack(level=1)
-    duration.columns = list(duration.columns.get_level_values('state'))
-    duration = duration.rename(
-        columns=lambda column_name: column_name + '_duration')
-    is_category = (duration > 0.0).rename(columns=lambda c: c.split('_')[0])
-    duration = pd.concat((duration, is_category), axis=1)
-    duration['is_classified'] = np.any(duration > 0.0, axis=1)
-    duration['n_unique_spiking'] = get_n_unique_spiking(ripple_spikes)
-    duration['n_total_spikes'] = get_n_total_spikes(ripple_spikes)
-
-    ripple_position_info = reshape_to_segments(position_info, ripple_times)
-    duration['actual_x_position'] = ripple_position_info.groupby(
-        'ripple_number').x_position.mean()
-    duration['actual_y_position'] = ripple_position_info.groupby(
-        'ripple_number').y_position.mean()
-    duration['actual_speed'] = ripple_position_info.groupby(
-        'ripple_number').speed.mean()
-
-    replay_info = pd.concat((ripple_times, duration), axis=1)
     animal, day, epoch = epoch_key
 
     replay_info['animal'] = animal
@@ -783,3 +773,155 @@ def get_sleep_replay_info(results, ripple_spikes, ripple_times, position_info,
         classifier.distance_between_nodes_[center_well_id].values())[-1]
 
     return replay_info
+
+
+def get_ripple_sleep_replay_info(ripple, results, spikes,
+                                 ripple_consensus_trace_zscore, position_info,
+                                 sampling_frequency, probability_threshold,
+                                 track_graph, classifier):
+
+    start_time = ripple.start_time
+    end_time = ripple.end_time
+    ripple_duration = ripple.duration
+
+    ripple_time_slice = slice(start_time, end_time)
+
+    try:
+        result = (results
+                  .sel(ripple_number=ripple.Index)
+                  .dropna('time', how='all')
+                  .assign_coords(
+                      time=lambda ds: ds.time / np.timedelta64(1, 's')))
+    except ValueError:
+        result = (results
+                  .sel(event_number=ripple.Index)
+                  .dropna('time', how='all')
+                  .assign_coords(
+                      time=lambda ds: ds.time / np.timedelta64(1, 's')))
+    probability = get_probability(result)
+    is_classified = get_is_classified(
+        probability, probability_threshold).astype(bool)
+    is_unclassified = (is_classified.sum('state') < 1).assign_coords(
+        state='Unclassified')
+    is_classified = xr.concat((is_classified, is_unclassified), dim='state')
+
+    classified = (~is_classified.sel(
+        state='Unclassified')).sum('time').values > 0
+
+    ripple_position_info = position_info.loc[ripple_time_slice]
+    is_immobility = ripple_position_info.speed <= 1
+    ripple_position_info = ripple_position_info.loc[is_immobility]
+
+    ripple_spikes = spikes.loc[ripple_time_slice]
+    ripple_spikes = ripple_spikes.loc[is_immobility]
+
+    ripple_consensus = np.asarray(
+        ripple_consensus_trace_zscore.loc[ripple_time_slice])
+    ripple_consensus = ripple_consensus[is_immobility]
+
+    posterior = result.acausal_posterior
+    map_estimate = maximum_a_posteriori_estimate(posterior.sum('state'))
+
+    time = np.asarray(posterior.time)
+    map_estimate = map_estimate.squeeze()
+    replay_speed = get_map_speed(
+        np.asarray(posterior.sum("state")),
+        classifier.track_graph_,
+        classifier.place_bin_center_ind_to_node_,
+        1 / sampling_frequency,
+    )
+    SMOOTH_SIGMA = 0.0025
+    replay_speed = gaussian_smooth(
+        replay_speed, SMOOTH_SIGMA, sampling_frequency)
+    hpd_threshold = highest_posterior_density(
+        posterior.sum("state"), coverage=0.95)
+    isin_hpd = posterior.sum("state") >= hpd_threshold[:, np.newaxis]
+    spatial_coverage = (
+        isin_hpd * np.diff(posterior.position)[0]).sum("position").values
+    n_position_bins = (posterior.sum("state", skipna=True)
+                       > 0).sum("position").values[0]
+    spatial_coverage_percentage = (isin_hpd.sum("position") /
+                                   n_position_bins).values
+
+    metrics = {
+        'start_time': start_time,
+        'end_time': end_time,
+        'duration': ripple_duration,
+        'is_classified': classified,
+        'n_unique_spiking': n_tetrodes_active(ripple_spikes),
+        'n_total_spikes': n_total_spikes(ripple_spikes),
+        'median_fraction_spikes_under_6_ms': np.nanmedian(
+            fraction_spikes_less_than_6_ms(
+                ripple_spikes, sampling_frequency)
+        ),
+        'median_spikes_per_bin': median_spikes_per_bin(
+            ripple_spikes),
+        'population_rate': population_rate(
+            ripple_spikes, sampling_frequency),
+        'actual_x_position': np.mean(
+            np.asarray(ripple_position_info.x_position)),
+        'actual_y_position': np.mean(
+            np.asarray(ripple_position_info.y_position)),
+        'actual_speed': np.mean(
+            np.asarray(ripple_position_info.speed)),
+        'state_order': get_state_order(is_classified),
+        'spatial_coverage': np.mean(spatial_coverage),
+        'spatial_coverage_percentage': np.mean(spatial_coverage_percentage),
+        'mean_ripple_consensus_trace_zscore': np.mean(
+            ripple_consensus),
+        'max_ripple_consensus_trace_zscore': np.max(
+            ripple_consensus),
+        'n_ripples': label(ripple_consensus > 2.5)[1]
+    }
+
+    for state, above_threshold in is_classified.groupby('state'):
+        above_threshold = above_threshold.astype(bool).values.squeeze()
+        metrics[f'{state}'] = np.sum(above_threshold) > 0
+        try:
+            metrics[f'{state}_max_probability'] = np.max(
+                np.asarray(probability.sel(state=state)))
+        except (KeyError, ValueError):
+            metrics[f'{state}_max_probability'] = np.nan
+
+        metrics[f'{state}_duration'] = duration(
+            above_threshold, sampling_frequency)
+        metrics[f'{state}_fraction_of_time'] = fraction_of_time(
+            above_threshold, time)
+
+        if np.any(above_threshold):
+            metrics[f'{state}_min_time'] = np.min(time[above_threshold])  # s
+            metrics[f'{state}_max_time'] = np.max(time[above_threshold])  # s
+            metrics[f'{state}_n_unique_spiking'] = n_tetrodes_active(
+                ripple_spikes.iloc[above_threshold])
+            metrics[f'{state}_n_total_spikes'] = n_total_spikes(
+                ripple_spikes.iloc[above_threshold])
+            metrics[f'{state}_median_fraction_spikes_under_6_ms'] = np.nanmedian(
+                fraction_spikes_less_than_6_ms(
+                    ripple_spikes.iloc[above_threshold], sampling_frequency)
+            )
+            metrics[f'{state}_population_rate'] = population_rate(
+                ripple_spikes.iloc[above_threshold], sampling_frequency)
+            metrics[f'{state}_median_spikes_per_bin'] = median_spikes_per_bin(
+                ripple_spikes.loc[above_threshold])
+            metrics[f'{state}_spatial_coverage'] = np.median(
+                spatial_coverage[above_threshold])  # cm
+            metrics[f'{state}_spatial_coverage_percentage'] = np.median(
+                spatial_coverage_percentage[above_threshold])
+            metrics[f"{state}_Hov_avg_prob"] = float(
+                probability.sel(state="Hover").isel(
+                    time=above_threshold).mean()
+            )
+            metrics[f"{state}_Cont_avg_prob"] = float(
+                probability.sel(state="Continuous").isel(
+                    time=above_threshold).mean()
+            )
+            metrics[f"{state}_Frag_avg_prob"] = float(
+                probability.sel(state="Fragmented").isel(
+                    time=above_threshold).mean()
+            )
+            metrics[f"{state}_mean_ripple_consensus_trace_zscore"] = np.mean(
+                ripple_consensus[above_threshold])
+            metrics[f"{state}_max_ripple_consensus_trace_zscore"] = np.max(
+                ripple_consensus[above_threshold])
+
+    return metrics
