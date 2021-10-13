@@ -352,17 +352,18 @@ def load_sleep_data(epoch_key, brain_areas=None):
     )
 
     return {
-        "position_info": position_info,
-        "ripple_times": ripple_times,
+        'position_info': position_info,
+        'ripple_times': ripple_times,
         'multiunit_HSE_times': multiunit_high_synchrony_times,
-        "spikes": spikes,
-        "multiunit": multiunit,
-        "lfps": lfps,
-        "tetrode_info": tetrode_info,
-        "ripple_filtered_lfps": ripple_filtered_lfps,
-        "ripple_lfps": ripple_lfps,
-        "multiunit_firing_rate": multiunit_firing_rate,
-        "sampling_frequency": SAMPLING_FREQUENCY,
+        'spikes': spikes,
+        'multiunit': multiunit,
+        'lfps': lfps,
+        'tetrode_info': tetrode_info,
+        'ripple_filtered_lfps': ripple_filtered_lfps,
+        'ripple_lfps': ripple_lfps,
+        'ripple_consensus_trace_zscore': ripple_consensus_trace_zscore,
+        'multiunit_firing_rate': multiunit_firing_rate,
+        'sampling_frequency': SAMPLING_FREQUENCY,
     }
 
 
