@@ -731,6 +731,12 @@ def get_sleep_replay_info(results, ripple_spikes, ripple_times, position_info,
     '''
     probability = get_probability(results)
     is_classified = get_is_classified(probability, probability_threshold)
+    is_unclassified = (is_classified.sum('state') < 1).assign_coords(
+        state='Unclassified')
+    is_classified = xr.concat((is_classified, is_unclassified), dim='state')
+
+    classified = (~is_classified.sel(
+        state='Unclassified')).sum('time').values > 0
 
     duration = (is_classified.sum('time') / sampling_frequency)
     duration = duration.to_dataframe().unstack(level=1)
