@@ -321,11 +321,9 @@ def load_sleep_data(epoch_key, brain_areas=None):
 
     logger.info('Loading multiunit...')
     tetrode_info = tetrode_info.loc[is_brain_areas]
-    multiunit = (
-        get_all_multiunit_indicators(
-            tetrode_info.index, ANIMALS, _time_function)
-        .reindex({"time": time})
-    )
+    multiunit = (get_all_multiunit_indicators(
+        tetrode_info.index, ANIMALS, _time_function)
+        .reindex({'time': time}))
     multiunit_spikes = (
         np.any(~np.isnan(multiunit.values), axis=1)).astype(np.float)
     multiunit_firing_rate = pd.DataFrame(
