@@ -7,12 +7,10 @@ from subprocess import PIPE, run
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 import xarray as xr
 from loren_frank_data_processing import save_xarray
 from replay_trajectory_classification import (ClusterlessClassifier,
                                               SortedSpikesClassifier)
-from scipy.ndimage import label
 from src.analysis import (get_place_field_max, get_sleep_replay_info,
                           reshape_to_segments)
 from src.load_data import get_sleep_and_prev_run_epochs, load_sleep_data
@@ -57,24 +55,14 @@ def sorted_spikes_analysis_1D(sleep_epoch_key, prev_run_epoch_key,
         logging.info(classifier)
 
         # Decode
-        is_test = data['position_info'].speed <= 4
-
-        test_groups = pd.DataFrame(
-            {'test_groups': label(is_test.values)[0]}, index=is_test.index)
-        immobility_results = []
-        for _, df in tqdm(test_groups.loc[is_test].groupby('test_groups'),
-                          desc='immobility'):
-            start_time, end_time = df.iloc[0].name, df.iloc[-1].name
+        results = []
+        for _, df in data['ripple_times'].iterrows():
+            start_time, end_time = df.start_time, df.end_time
             test_spikes = data['spikes'].loc[start_time:end_time]
-            immobility_results.append(
-                classifier.predict(test_spikes, time=test_spikes.index))
-        immobility_results = xr.concat(immobility_results, dim='time')
-
-        results = [(immobility_results
-                    .sel(time=slice(df.start_time, df.end_time))
-                    .assign_coords(time=lambda ds: ds.time - ds.time[0]))
-                   for _, df in data['ripple_times'].iterrows()]
-
+            results.append(
+                classifier.predict(
+                    test_spikes, time=test_spikes.index - test_spikes.index[0])
+                .drop(['likelihood', 'causal_posterior']))
         results = (xr.concat(results, dim=data['ripple_times'].index)
                    .assign_coords(state=lambda ds: ds.state.to_index()
                                   .map(TRANSITION_TO_CATEGORY)))
@@ -83,7 +71,7 @@ def sorted_spikes_analysis_1D(sleep_epoch_key, prev_run_epoch_key,
         ripple_times = data['ripple_times'].loc[:, ['start_time', 'end_time']]
         ripple_spikes = reshape_to_segments(data['spikes'], ripple_times)
         save_xarray(PROCESSED_DATA_DIR, sleep_epoch_key,
-                    results.drop(['likelihood', 'causal_posterior']),
+                    results,
                     group=f'/{data_type}/{dim}/classifier/ripples/')
 
     logging.info('Saving replay_info...')
@@ -184,26 +172,16 @@ def clusterless_analysis_1D(sleep_epoch_key, prev_run_epoch_key,
         logging.info(classifier)
 
         # Decode
-        is_test = data['position_info'].speed <= 4
-
-        test_groups = pd.DataFrame(
-            {'test_groups': label(is_test.values)[0]}, index=is_test.index)
-        immobility_results = []
-        for _, df in tqdm(test_groups.loc[is_test].groupby('test_groups'),
-                          desc='immobility'):
-            start_time, end_time = df.iloc[0].name, df.iloc[-1].name
+        results = []
+        for _, df in data['ripple_times'].iterrows():
+            start_time, end_time = df.start_time, df.end_time
             test_multiunit = data['multiunit'].sel(
                 time=slice(start_time, end_time))
-            immobility_results.append(
-                classifier.predict(test_multiunit, time=test_multiunit.time))
-
-        immobility_results = xr.concat(immobility_results, dim='time')
-
-        results = [(immobility_results
-                    .sel(time=slice(df.start_time, df.end_time))
-                    .assign_coords(time=lambda ds: ds.time - ds.time[0]))
-                   for _, df in data['ripple_times'].iterrows()]
-
+            results.append(
+                classifier.predict(
+                    test_multiunit,
+                    time=test_multiunit.time - test_multiunit.time[0])
+                .drop(['likelihood', 'causal_posterior']))
         results = (xr.concat(results, dim=data['ripple_times'].index)
                    .assign_coords(state=lambda ds: ds.state.to_index()
                                   .map(TRANSITION_TO_CATEGORY)))
