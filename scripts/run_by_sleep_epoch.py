@@ -29,7 +29,11 @@ plt.switch_backend('agg')
 
 
 def sorted_spikes_analysis_1D(sleep_epoch_key, prev_run_epoch_key,
-                              plot_ripple_figures=False):
+                              plot_ripple_figures=False,
+                              exclude_interneuron_spikes=False,
+                              use_multiunit_HSE=False,
+                              brain_areas=None,
+                              overwrite=False):
     data_type, dim = 'sorted_spikes', '1D'
 
     logging.info('Loading data...')
@@ -40,6 +44,8 @@ def sorted_spikes_analysis_1D(sleep_epoch_key, prev_run_epoch_key,
         (f'{prev_run_epoch_key[0]}_{prev_run_epoch_key[1]:02}_'
          f'{prev_run_epoch_key[2]:02}_{data_type}_{dim}_model.pkl'))
     try:
+        if overwrite:
+            raise FileNotFoundError
         results = xr.open_dataset(
             os.path.join(
                 PROCESSED_DATA_DIR,
@@ -144,17 +150,26 @@ def sorted_spikes_analysis_1D(sleep_epoch_key, prev_run_epoch_key,
 
 
 def clusterless_analysis_1D(sleep_epoch_key, prev_run_epoch_key,
-                            plot_ripple_figures=False):
+                            plot_ripple_figures=False,
+                            exclude_interneuron_spikes=False,
+                            use_multiunit_HSE=False,
+                            brain_areas=None,
+                            overwrite=False):
     data_type, dim = 'clusterless', '1D'
 
     logging.info('Loading data...')
-    data = load_sleep_data(sleep_epoch_key)
+    data = load_sleep_data(
+        sleep_epoch_key,
+        brain_areas=brain_areas,
+        exclude_interneuron_spikes=exclude_interneuron_spikes)
 
     model_name = os.path.join(
         PROCESSED_DATA_DIR,
         (f'{prev_run_epoch_key[0]}_{prev_run_epoch_key[1]:02}_'
          f'{prev_run_epoch_key[2]:02}_{data_type}_{dim}_model.pkl'))
     try:
+        if overwrite:
+            raise FileNotFoundError
         results = xr.open_dataset(
             os.path.join(
                 PROCESSED_DATA_DIR,
@@ -283,6 +298,10 @@ def get_command_line_arguments():
     parser.add_argument('--n_workers', type=int, default=16)
     parser.add_argument('--threads_per_worker', type=int, default=1)
     parser.add_argument('--plot_ripple_figures', action='store_true')
+    parser.add_argument('--exclude_interneuron_spikes', action='store_true')
+    parser.add_argument('--use_multiunit_HSE', action='store_true')
+    parser.add_argument('--CA1', action='store_true')
+    parser.add_argument('--overwrite', action='store_true')
     parser.add_argument(
         '-d', '--debug',
         help='More verbose output for debugging',
@@ -319,10 +338,20 @@ def main():
                    stdout=PIPE, universal_newlines=True).stdout
     logging.info('Git Hash: {git_hash}'.format(git_hash=git_hash.rstrip()))
 
+    if args.CA1:
+        brain_areas = ['CA1']
+    else:
+        brain_areas = None
+
     # Analysis Code
     run_analysis[(args.data_type, args.dim)](
-        sleep_epoch_key, prev_run_epoch_key,
-        plot_ripple_figures=args.plot_ripple_figures)
+        sleep_epoch_key,
+        prev_run_epoch_key,
+        plot_ripple_figures=args.plot_ripple_figures,
+        exclude_interneuron_spikes=args.exclude_interneuron_spikes,
+        use_multiunit_HSE=args.use_multiunit_HSE,
+        brain_areas=brain_areas,
+        overwrite=args.overwrite)
 
 
 if __name__ == '__main__':
