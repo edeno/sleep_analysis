@@ -37,7 +37,10 @@ def sorted_spikes_analysis_1D(sleep_epoch_key, prev_run_epoch_key,
     data_type, dim = 'sorted_spikes', '1D'
 
     logging.info('Loading data...')
-    data = load_sleep_data(sleep_epoch_key)
+    data = load_sleep_data(
+        sleep_epoch_key,
+        brain_areas=brain_areas,
+        exclude_interneuron_spikes=exclude_interneuron_spikes)
 
     model_name = os.path.join(
         PROCESSED_DATA_DIR,
