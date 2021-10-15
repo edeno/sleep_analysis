@@ -194,8 +194,11 @@ def load_data(epoch_key, brain_areas=None,
     (ripple_times, ripple_filtered_lfps, ripple_lfps,
      ripple_consensus_trace_zscore) = get_ripple_times(epoch_key)
 
-    ripple_times = ripple_times.assign(
-        duration=lambda df: (df.end_time - df.start_time).dt.total_seconds())
+    try:
+        ripple_times = ripple_times.assign(
+            duration=lambda df: (df.end_time - df.start_time).dt.total_seconds())
+    except AttributeError:
+        pass
 
     return {
         'position_info': position_info,
