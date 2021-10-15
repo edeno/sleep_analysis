@@ -396,24 +396,43 @@ def load_sleep_data(epoch_key, brain_areas=None,
     }
 
 
-def get_sleep_and_prev_run_epochs():
+def has_enough_neurons(df):
+    return ((df.reset_index('animal').animal == 'remy').values |
+            (df.n_neurons > 9))
 
+
+def get_sleep_and_prev_run_epochs():
     epoch_info = make_epochs_dataframe(ANIMALS)
+    neuron_info = make_neuron_dataframe(ANIMALS)
+    neuron_info = neuron_info.loc[
+        (neuron_info.type == 'principal') &
+        (neuron_info.numspikes > 100) &
+        neuron_info.area.isin(_BRAIN_AREAS)]
+    n_neurons = (neuron_info
+                 .groupby(['animal', 'day', 'epoch'])
+                 .neuron_id
+                 .agg(len)
+                 .rename('n_neurons')
+                 .to_frame())
+
+    epoch_info = epoch_info.join(n_neurons)
     sleep_epoch_keys = []
     prev_run_epoch_keys = []
 
     for _, df in epoch_info.groupby(["animal", "day"]):
-        is_w_track = (
+        is_w_track = np.asarray(
             df.iloc[:-1].environment.isin(
                 ["TrackA", "TrackB", "WTrackA", "WTrackB", "wtrack"]
             )
-        ).values
+        )
 
         is_sleep_after_run = (df.iloc[1:].type == "sleep") & is_w_track
         sleep_ind = np.nonzero(is_sleep_after_run)[0] + 1
+        is_enough = (np.asarray(has_enough_neurons(df.iloc[sleep_ind])) &
+                     np.asarray(has_enough_neurons(df.iloc[sleep_ind - 1])))
 
-        sleep_epoch_keys.append(df.iloc[sleep_ind].index)
-        prev_run_epoch_keys.append(df.iloc[sleep_ind - 1].index)
+        sleep_epoch_keys.append(df.iloc[sleep_ind].index[is_enough])
+        prev_run_epoch_keys.append(df.iloc[sleep_ind - 1].index[is_enough])
 
     sleep_epoch_keys = list(itertools.chain(*sleep_epoch_keys))
     prev_run_epoch_keys = list(itertools.chain(*prev_run_epoch_keys))
