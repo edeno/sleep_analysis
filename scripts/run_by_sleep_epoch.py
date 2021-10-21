@@ -201,7 +201,7 @@ def clusterless_analysis_1D(sleep_epoch_key, prev_run_epoch_key,
                 classifier.predict(
                     test_multiunit,
                     time=test_multiunit.time - test_multiunit.time[0])
-                .drop(['likelihood', 'causal_posterior']))
+            )
         results = (xr.concat(results, dim=data['ripple_times'].index)
                    .assign_coords(state=lambda ds: ds.state.to_index()
                                   .map(TRANSITION_TO_CATEGORY)))
@@ -214,7 +214,7 @@ def clusterless_analysis_1D(sleep_epoch_key, prev_run_epoch_key,
 
         logging.info('Saving results...')
         save_xarray(PROCESSED_DATA_DIR, sleep_epoch_key,
-                    results,
+                    results.drop(['likelihood', 'causal_posterior']),
                     group=f'/{data_type}/{dim}/classifier/ripples/')
 
     logging.info('Saving replay_info...')
