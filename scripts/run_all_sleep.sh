@@ -12,42 +12,42 @@ python queue_sleep_cluster_jobs.py --data_type 'clusterless' \
                                    --wall_time $CLUSTERLESS_WALLTIME \
                                    --overwrite \
 
-python queue_sleep_cluster_jobs.py --Animal 'remy' --Day 35 --Epoch 2 \
+python queue_sleep_cluster_jobs.py --Animal 'remy' --Day 35 --Epoch 3 \
                                    --data_type 'clusterless' \
                                    --n_cores $NCORES \
                                    --n_workers $NWORKERS \
                                    --wall_time $REMY_WALLTIME \
                                    --overwrite \
 
-python queue_sleep_cluster_jobs.py --Animal 'remy' --Day 35 --Epoch 4 \
+python queue_sleep_cluster_jobs.py --Animal 'remy' --Day 35 --Epoch 5 \
                                    --data_type 'clusterless' \
                                    --n_cores $NCORES \
                                    --n_workers $NWORKERS \
                                    --wall_time $REMY_WALLTIME \
                                    --overwrite \
 
-python queue_sleep_cluster_jobs.py --Animal 'remy' --Day 36 --Epoch 2 \
+python queue_sleep_cluster_jobs.py --Animal 'remy' --Day 36 --Epoch 3 \
                                    --data_type 'clusterless' \
                                    --n_cores $NCORES \
                                    --n_workers $NWORKERS \
                                    --wall_time $REMY_WALLTIME \
                                    --overwrite \
 
-python queue_sleep_cluster_jobs.py --Animal 'remy' --Day 36 --Epoch 4 \
+python queue_sleep_cluster_jobs.py --Animal 'remy' --Day 36 --Epoch 5 \
                                    --data_type 'clusterless' \
                                    --n_cores $NCORES \
                                    --n_workers $NWORKERS \
                                    --wall_time $REMY_WALLTIME \
                                    --overwrite \
 
-python queue_sleep_cluster_jobs.py --Animal 'remy' --Day 37 --Epoch 2 \
+python queue_sleep_cluster_jobs.py --Animal 'remy' --Day 37 --Epoch 3 \
                                    --data_type 'clusterless' \
                                    --n_cores $NCORES \
                                    --n_workers $NWORKERS \
                                    --wall_time $REMY_WALLTIME \
                                    --overwrite \
 
-python queue_sleep_cluster_jobs.py --Animal 'remy' --Day 37 --Epoch 4 \
+python queue_sleep_cluster_jobs.py --Animal 'remy' --Day 37 --Epoch 5 \
                                    --data_type 'clusterless' \
                                    --n_cores $NCORES \
                                    --n_workers $NWORKERS \
