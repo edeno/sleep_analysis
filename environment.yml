@@ -4,7 +4,7 @@ channels:
 - conda-forge
 - edeno
 dependencies:
-- "python == 3.6"
+- "python == 3.6.*"
 - numpy
 - "pandas == 0.25.3"
 - scipy
@@ -16,7 +16,7 @@ dependencies:
 - scikit-learn
 - dask
 - "trajectory_analysis_tools == 0.3.0.dev0"
-- "loren_frank_data_processing == 0.9.13.dev0"
+- loren_frank_data_processing
 - "ripple_detection == 0.1.8.dev0"
 - "replay_trajectory_classification == 0.7.7.dev0"
 - jupyter
