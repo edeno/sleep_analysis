@@ -20,6 +20,7 @@ dependencies:
 - "ripple_detection == 0.1.8.dev0"
 - "replay_trajectory_classification == 0.7.7.dev0"
 - jupyter
+- jupyterlab
 - nb_conda
 - setuptools
 - pytest
