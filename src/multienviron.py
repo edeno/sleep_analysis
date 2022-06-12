@@ -71,7 +71,10 @@ def decode(epoch_keys, cur_env):
         initial_conditions_type=initial_conditions,
         observation_models=observation_models,
         continuous_transition_types=continuous_transition_types,
-        knot_spacing=8.0,
+        sorted_spikes_algorithm='spiking_likelihood_glm',
+        sorted_spikes_algorithm_params={
+            'knot_spacing': 8.0
+        },
     )
 
     common_ind = get_common_ind([env_data['neuron_info']
@@ -164,7 +167,10 @@ def decode2D(epoch_keys, cur_env):
         initial_conditions_type=initial_conditions,
         observation_models=observation_models,
         continuous_transition_types=continuous_transition_types,
-        knot_spacing=8.0,
+        sorted_spikes_algorithm='spiking_likelihood_kde_gpu',
+        sorted_spikes_algorithm_params={
+            'position_std': 6.0
+        },
     )
 
     common_ind = get_common_ind([env_data['neuron_info']
