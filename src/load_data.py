@@ -10,6 +10,7 @@ from loren_frank_data_processing import (get_all_multiunit_indicators,
                                          get_trial_time, make_epochs_dataframe,
                                          make_neuron_dataframe,
                                          make_tetrode_dataframe)
+from loren_frank_data_processing.position import get_track_segments
 from ripple_detection import (Kay_ripple_detector,
                               get_multiunit_population_firing_rate,
                               multiunit_HSE_detector)
@@ -18,8 +19,57 @@ from scipy.fftpack import next_fast_len
 from scipy.signal import filtfilt, hilbert
 from scipy.stats import zscore
 from src.parameters import _BRAIN_AREAS, _MARKS, ANIMALS, SAMPLING_FREQUENCY
+from track_linearization import get_linearized_position, make_track_graph
+
 
 logger = getLogger(__name__)
+
+
+
+def make_wtrack_track_graph(epoch_key, animals):
+    '''
+
+    Parameters
+    ----------
+    epoch_key : tuple, (animal, day, epoch)
+    animals : dict of namedtuples
+
+    Returns
+    -------
+    track_graph : networkx Graph
+    center_well_id : int
+
+    '''
+    track_segments, center_well_position = get_track_segments(
+        epoch_key, animals)
+    nodes = track_segments.copy().reshape((-1, 2))
+    _, unique_ind = np.unique(nodes, return_index=True, axis=0)
+    nodes = nodes[np.sort(unique_ind)]
+
+    edges = np.zeros(track_segments.shape[:2], dtype=np.int)
+    for node_id, node in enumerate(nodes):
+        edge_ind = np.nonzero(np.isin(track_segments, node).sum(axis=2) > 1)
+        edges[edge_ind] = node_id
+        
+    edge_order = [(0, 1), (1, 2), (2, 3), (1, 4), (4, 5)]
+    edge_spacing = [15, 0, 15, 0]
+    
+    return make_track_graph(nodes, edges), edge_order, edge_spacing
+
+def make_sleep_track_graph(position_info):
+    x1 = position_info.x_position.min()
+    x2 = position_info.x_position.max()
+    y = position_info.y_position.median()
+
+    node_positions = [(x1, y), (x2, y)]
+    edges = [(0, 1)]
+    
+    edge_order = edges
+    edge_spacing = 0
+
+    track_graph = make_track_graph(node_positions, edges)
+    
+    return track_graph, edge_order, edge_spacing
 
 
 def filter_ripple_band(data):
@@ -138,13 +188,13 @@ def load_data(epoch_key, brain_areas=None,
         neuron_info = make_neuron_dataframe(ANIMALS).xs(
             epoch_key, drop_level=False)
         neuron_info = neuron_info.loc[
-            (neuron_info.numspikes > 100) &
-            neuron_info.area.isin(brain_areas) &
-            (neuron_info.type == 'principal')]
+            neuron_info.area.isin(brain_areas)
+            ]
         spikes = get_all_spike_indicators(
             neuron_info.index, ANIMALS, _time_function).reindex(time)
     except KeyError:
         spikes = None
+        neuron_info = None
 
     logger.info('Loading multiunit...')
     tetrode_info = tetrode_info.loc[is_brain_areas]
@@ -199,6 +249,8 @@ def load_data(epoch_key, brain_areas=None,
             duration=lambda df: (df.end_time - df.start_time).dt.total_seconds())
     except AttributeError:
         pass
+    
+    track_graph, edge_order, edge_spacing = make_wtrack_track_graph(epoch_key, ANIMALS)
 
     return {
         'position_info': position_info,
@@ -213,6 +265,10 @@ def load_data(epoch_key, brain_areas=None,
         'ripple_consensus_trace_zscore': ripple_consensus_trace_zscore,
         'multiunit_firing_rate': multiunit_firing_rate,
         'sampling_frequency': SAMPLING_FREQUENCY,
+        'track_graph': track_graph,
+        'edge_order': edge_order,
+        'edge_spacing': edge_spacing,
+        'neuron_info': neuron_info,
     }
 
 
@@ -299,6 +355,12 @@ def load_sleep_data(epoch_key, brain_areas=None,
     position_info = get_sleep_interpolated_position_info(
         epoch_key, ANIMALS, _time_function
     ).dropna(subset=["speed"])
+    
+    track_graph, edge_order, edge_spacing = make_sleep_track_graph(position_info)
+    linear_position_df = get_linearized_position(
+        position=position_info[['x_position', 'y_position']].values,
+        track_graph=track_graph, use_HMM=False).set_index(position_info.index)
+    position_info = pd.concat((position_info, linear_position_df), axis=1)
 
     time = position_info.index
 
@@ -314,15 +376,14 @@ def load_sleep_data(epoch_key, brain_areas=None,
         neuron_info = make_neuron_dataframe(
             ANIMALS).xs(epoch_key, drop_level=False)
         neuron_info = neuron_info.loc[
-            (neuron_info.numspikes > 100)
-            & neuron_info.area.isin(brain_areas)
-            & (neuron_info.type == "principal")
+            neuron_info.area.isin(brain_areas)
         ]
         spikes = get_all_spike_indicators(
             neuron_info.index, ANIMALS, _time_function
         ).reindex(time)
     except KeyError:
         spikes = None
+        neuron_info = None
 
     logger.info('Loading multiunit...')
     tetrode_info = tetrode_info.loc[is_brain_areas]
@@ -393,6 +454,10 @@ def load_sleep_data(epoch_key, brain_areas=None,
         'ripple_consensus_trace_zscore': ripple_consensus_trace_zscore,
         'multiunit_firing_rate': multiunit_firing_rate,
         'sampling_frequency': SAMPLING_FREQUENCY,
+        'track_graph': track_graph,
+        'edge_order': edge_order,
+        'edge_spacing': edge_spacing,
+        'neuron_info': neuron_info,
     }
 
 
